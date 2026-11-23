@@ -1,0 +1,56 @@
+name: Deploy Pages（main 站点 + DeepTutor 介绍站）
+
+on:
+  push:
+    branches: [main, deeptutor]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main（发布到站点根路径）
+        uses: actions/checkout@v4
+        with:
+          path: site-main
+
+      - name: Checkout deeptutor 分支（发布到 /deeptutor/ 子路径）
+        uses: actions/checkout@v4
+        with:
+          ref: deeptutor
+          path: site-deeptutor
+
+      - name: 组合双站点
+        run: |
+          mkdir -p staging/deeptutor
+          cp -a site-main/. staging/
+          cp -a site-deeptutor/. staging/deeptutor/
+          rm -rf staging/.git staging/deeptutor/.git
+          touch staging/.nojekyll
+          echo "staging 根目录:" && ls staging | head -20
+          echo "deeptutor 子目录:" && ls staging/deeptutor
+
+      - name: 上传 Pages 产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: staging
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 部署到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
